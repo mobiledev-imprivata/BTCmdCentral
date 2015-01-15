@@ -52,7 +52,8 @@ class BluetoothManager: NSObject {
         centralManager.scanForPeripheralsWithServices([uuid], options: nil)
     }
     
-    private func timeout() {
+    // can't be private because called by timer
+    func timeout() {
         println("timed out")
         centralManager.stopScan()
         isBusy = false
