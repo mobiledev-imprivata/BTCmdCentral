@@ -19,11 +19,10 @@ class BluetoothManager: NSObject {
     
     var centralManager: CBCentralManager!
     var peripheral: CBPeripheral!
+    var commandCharacteristic: CBCharacteristic!
     var responseCharacteristic: CBCharacteristic!
     var isPoweredOn = false
     var scanTimer: NSTimer!
-    // use this to disconnect after all the requested characteristic values have been read
-    var nCharacteristicsRequested = 0
     
     var isBusy = false
     
@@ -136,27 +135,34 @@ extension BluetoothManager: CBPeripheralDelegate {
             println("peripheral didDiscoverCharacteristicsForService error \(error.localizedDescription)")
             return
         }
-        nCharacteristicsRequested = service.characteristics.count
         for characteristic in service.characteristics {
             let name = nameFromUUID(characteristic.UUID)
             println("characteristic \(name) \(characteristic.UUID)")
             if characteristic.UUID == commandCharacteristicUUID {
-                let data = "Hello, World!".dataUsingEncoding(NSUTF8StringEncoding)
-                peripheral.writeValue(data, forCharacteristic: characteristic as CBCharacteristic, type: CBCharacteristicWriteType.WithResponse)
+                commandCharacteristic = characteristic as CBCharacteristic
             } else if characteristic.UUID == responseCharacteristicUUID {
                 responseCharacteristic = characteristic as CBCharacteristic
+                peripheral.setNotifyValue(true, forCharacteristic: responseCharacteristic)
             }
+        }
+    }
+    
+    func peripheral(peripheral: CBPeripheral!, didUpdateNotificationStateForCharacteristic characteristic: CBCharacteristic!, error: NSError!) {
+        if error == nil {
+            let name = nameFromUUID(characteristic.UUID)
+            println("peripheral didUpdateNotificationStateForCharacteristic \(name) ok")
+            let data = "Hello, World!".dataUsingEncoding(NSUTF8StringEncoding)
+            peripheral.writeValue(data, forCharacteristic: commandCharacteristic, type: CBCharacteristicWriteType.WithResponse)
+        } else {
+            println("peripheral didUpdateNotificationStateForCharacteristic error \(error.localizedDescription)")
         }
     }
     
     func peripheral(peripheral: CBPeripheral!, didWriteValueForCharacteristic characteristic: CBCharacteristic!, error: NSError!) {
         if error == nil {
             println("peripheral didWriteValueForCharacteristic ok")
-            peripheral.readValueForCharacteristic(responseCharacteristic)
-            nCharacteristicsRequested = 1
         } else {
             println("peripheral didWriteValueForCharacteristic error \(error.localizedDescription)")
-            return
         }
     }
 
@@ -170,15 +176,11 @@ extension BluetoothManager: CBPeripheralDelegate {
             println("peripheral didUpdateValueForCharacteristic error \(error.localizedDescription)")
             return
         }
-        nCharacteristicsRequested--;
-        if nCharacteristicsRequested == 0 {
-            println("disconnecting")
-            centralManager.cancelPeripheralConnection(peripheral)
-            self.peripheral = nil
-            self.responseCharacteristic = nil
-            isBusy = false
-        }
+        println("disconnecting")
+        centralManager.cancelPeripheralConnection(peripheral)
+        self.peripheral = nil
+        self.responseCharacteristic = nil
+        isBusy = false
     }
-    
     
 }
