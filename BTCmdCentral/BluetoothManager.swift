@@ -19,7 +19,6 @@ class BluetoothManager: NSObject {
     
     var centralManager: CBCentralManager!
     var peripheral: CBPeripheral!
-    var commandCharacteristic: CBCharacteristic!
     var responseCharacteristic: CBCharacteristic!
     var isPoweredOn = false
     var scanTimer: NSTimer!
@@ -123,7 +122,6 @@ extension BluetoothManager: CBPeripheralDelegate {
         }
         for service in peripheral.services {
             println("service \(nameFromUUID(service.UUID))  \(service.UUID)")
-            var uuids = [CBUUID]()
             peripheral.discoverCharacteristics(nil, forService: service as CBService)
         }
     }
@@ -139,28 +137,18 @@ extension BluetoothManager: CBPeripheralDelegate {
             let name = nameFromUUID(characteristic.UUID)
             println("characteristic \(name) \(characteristic.UUID)")
             if characteristic.UUID == commandCharacteristicUUID {
-                commandCharacteristic = characteristic as CBCharacteristic
+                let data = "Hello, World!".dataUsingEncoding(NSUTF8StringEncoding)
+                peripheral.writeValue(data, forCharacteristic: characteristic as CBCharacteristic, type: CBCharacteristicWriteType.WithResponse)
             } else if characteristic.UUID == responseCharacteristicUUID {
                 responseCharacteristic = characteristic as CBCharacteristic
-                peripheral.setNotifyValue(true, forCharacteristic: responseCharacteristic)
             }
-        }
-    }
-    
-    func peripheral(peripheral: CBPeripheral!, didUpdateNotificationStateForCharacteristic characteristic: CBCharacteristic!, error: NSError!) {
-        if error == nil {
-            let name = nameFromUUID(characteristic.UUID)
-            println("peripheral didUpdateNotificationStateForCharacteristic \(name) ok")
-            let data = "Hello, World!".dataUsingEncoding(NSUTF8StringEncoding)
-            peripheral.writeValue(data, forCharacteristic: commandCharacteristic, type: CBCharacteristicWriteType.WithResponse)
-        } else {
-            println("peripheral didUpdateNotificationStateForCharacteristic error \(error.localizedDescription)")
         }
     }
     
     func peripheral(peripheral: CBPeripheral!, didWriteValueForCharacteristic characteristic: CBCharacteristic!, error: NSError!) {
         if error == nil {
             println("peripheral didWriteValueForCharacteristic ok")
+            peripheral.readValueForCharacteristic(responseCharacteristic)
         } else {
             println("peripheral didWriteValueForCharacteristic error \(error.localizedDescription)")
         }
