@@ -122,7 +122,7 @@ extension BluetoothManager: CBPeripheralDelegate {
         }
         for service in peripheral.services {
             log("service \(nameFromUUID(service.UUID))  \(service.UUID)")
-            peripheral.discoverCharacteristics(nil, forService: service as CBService)
+            peripheral.discoverCharacteristics(nil, forService: service as! CBService)
         }
     }
     
@@ -138,9 +138,9 @@ extension BluetoothManager: CBPeripheralDelegate {
             log("characteristic \(name) \(characteristic.UUID)")
             if characteristic.UUID == commandCharacteristicUUID {
                 let data = "Hello, World!".dataUsingEncoding(NSUTF8StringEncoding)
-                peripheral.writeValue(data, forCharacteristic: characteristic as CBCharacteristic, type: CBCharacteristicWriteType.WithResponse)
+                peripheral.writeValue(data, forCharacteristic: characteristic as! CBCharacteristic, type: CBCharacteristicWriteType.WithResponse)
             } else if characteristic.UUID == responseCharacteristicUUID {
-                responseCharacteristic = characteristic as CBCharacteristic
+                responseCharacteristic = characteristic as! CBCharacteristic
             }
         }
     }
@@ -158,7 +158,7 @@ extension BluetoothManager: CBPeripheralDelegate {
         if error == nil {
             let name = nameFromUUID(characteristic.UUID)
             log("peripheral didUpdateValueForCharacteristic \(name) ok")
-            let value: String = NSString(data: characteristic.value, encoding: NSUTF8StringEncoding)!
+            let value: String = NSString(data: characteristic.value, encoding: NSUTF8StringEncoding)! as String
             log("received response: \(value)")
         } else {
             log("peripheral didUpdateValueForCharacteristic error \(error.localizedDescription)")
