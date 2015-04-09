@@ -11,25 +11,41 @@ import CoreBluetooth
 
 class BluetoothManager: NSObject {
     
-    let provisioningServiceUUID = CBUUID(string: "193DB24F-E42E-49D2-9A70-6A5616863A9D")
-    let commandCharacteristicUUID = CBUUID(string: "43CDD5AB-3EF6-496A-A4CC-9933F5ADAF68")
-    let responseCharacteristicUUID = CBUUID(string: "F1A9A759-C922-4219-B62C-1A14F62DE0A4")
+    private let provisioningServiceUUID = CBUUID(string: "193DB24F-E42E-49D2-9A70-6A5616863A9D")
+    private let commandCharacteristicUUID = CBUUID(string: "43CDD5AB-3EF6-496A-A4CC-9933F5ADAF68")
+    private let responseCharacteristicUUID = CBUUID(string: "F1A9A759-C922-4219-B62C-1A14F62DE0A4")
     
-    let timeoutInSecs = 5.0
+    private let timeoutInSecs = 5.0
     
-    var centralManager: CBCentralManager!
-    var peripheral: CBPeripheral!
-    var responseCharacteristic: CBCharacteristic!
-    var isPoweredOn = false
-    var scanTimer: NSTimer!
+    private var centralManager: CBCentralManager!
+    private var peripheral: CBPeripheral!
+    private var responseCharacteristic: CBCharacteristic!
+    private var isPoweredOn = false
+    private var scanTimer: NSTimer!
     
-    var isBusy = false
+    private var isBusy = false
+    
+    private let dechunker = Dechunker()
+    
+    private let chunkSize = 15
+    private var nChunks = 0
+    private var nChunksSent = 0
+    private var startTime = NSDate()
+    
+    private let moby = "Call me Ishmael. Some years ago - never mind how long precisely - having little or no money in my purse, and nothing particular to interest me on shore, I thought I would sail about a little and see the watery part of the world. It is a way I have of driving off the spleen and regulating the circulation. Whenever I find myself growing grim about the mouth; whenever it is a damp, drizzly November in my soul; whenever I find myself involuntarily pausing before coffin warehouses, and bringing up the rear of every funeral I meet; and especially whenever my hypos get such an upper hand of me, that it requires a strong moral principle to prevent me from deliberately stepping into the street, and methodically knocking people's hats off - then, I account it high time to get to sea as soon as I can. This is my substitute for pistol and ball. With a philosophical flourish Cato throws himself upon his sword; I quietly take to the ship. There is nothing surprising in this. If they but knew it, almost all men in their degree, some time or other, cherish very nearly the same feelings towards the ocean with me."
+    
+    var mobyBytes = [UInt8]()
     
     // See:
     // http://stackoverflow.com/questions/24218581/need-self-to-set-all-constants-of-a-swift-class-in-init
     // http://stackoverflow.com/questions/24441254/how-to-pass-self-to-initializer-during-initialization-of-an-object-in-swift
     override init() {
         super.init()
+        
+        for codeUnit in moby.utf8 {
+            mobyBytes.append(codeUnit)
+        }
+        
         centralManager = CBCentralManager(delegate:self, queue:nil)
     }
     
@@ -63,6 +79,16 @@ class BluetoothManager: NSObject {
         case commandCharacteristicUUID: return "commandCharacteristic"
         case responseCharacteristicUUID: return "responseCharacteristic"
         default: return "unknown"
+        }
+    }
+    
+    private func processResponse(responseBytes: [UInt8]) {
+        log("processResponse")
+        if let response = NSString(bytes: responseBytes, length: responseBytes.count, encoding: NSUTF8StringEncoding) {
+            log("got response:")
+            log(response as String)
+        } else {
+            log("failed to parse response")
         }
     }
     
@@ -137,8 +163,16 @@ extension BluetoothManager: CBPeripheralDelegate {
             let name = nameFromUUID(characteristic.UUID)
             log("characteristic \(name) \(characteristic.UUID)")
             if characteristic.UUID == commandCharacteristicUUID {
-                let data = "Hello, World!".dataUsingEncoding(NSUTF8StringEncoding)
-                peripheral.writeValue(data, forCharacteristic: characteristic as! CBCharacteristic, type: CBCharacteristicWriteType.WithResponse)
+                let chunks = Chunker.makeChunks(mobyBytes, chunkSize: chunkSize)
+                log("chunk count=\(chunks.count)")
+                nChunks = chunks.count
+                nChunksSent = 0
+                startTime = NSDate()
+                for (i, chunk) in enumerate(chunks) {
+                    let chunkData = NSData(bytes: chunk, length: chunk.count)
+                    log("sending chunk \(i + 1) (\(chunkData.length) bytes)")
+                    peripheral.writeValue(chunkData, forCharacteristic: characteristic as! CBCharacteristic, type: CBCharacteristicWriteType.WithResponse)
+                }
             } else if characteristic.UUID == responseCharacteristicUUID {
                 responseCharacteristic = characteristic as! CBCharacteristic
             }
@@ -147,8 +181,14 @@ extension BluetoothManager: CBPeripheralDelegate {
     
     func peripheral(peripheral: CBPeripheral!, didWriteValueForCharacteristic characteristic: CBCharacteristic!, error: NSError!) {
         if error == nil {
-            log("peripheral didWriteValueForCharacteristic ok")
-            peripheral.readValueForCharacteristic(responseCharacteristic)
+            nChunksSent++
+            log("peripheral didWriteValueForCharacteristic ok (\(nChunksSent)/\(nChunks))")
+            if nChunksSent == nChunks {
+                let timeInterval = startTime.timeIntervalSinceNow
+                log("all chunks sent in \(-timeInterval) secs")
+                startTime = NSDate()
+                peripheral.readValueForCharacteristic(responseCharacteristic)
+            }
         } else {
             log("peripheral didWriteValueForCharacteristic error \(error.localizedDescription)")
         }
@@ -158,13 +198,36 @@ extension BluetoothManager: CBPeripheralDelegate {
         if error == nil {
             let name = nameFromUUID(characteristic.UUID)
             log("peripheral didUpdateValueForCharacteristic \(name) ok")
-            let value: String = NSString(data: characteristic.value, encoding: NSUTF8StringEncoding)! as String
-            log("received response: \(value)")
+            log("received chunk (\(characteristic.value.length) bytes)")
+            var chunkBytes = [UInt8](count: characteristic.value.length, repeatedValue: 0)
+            characteristic.value.getBytes(&chunkBytes, length: characteristic.value.length)
+            let retval = dechunker.addChunk(chunkBytes)
+            if retval.isSuccess {
+                if let finalResult = retval.finalResult {
+                    log("dechunker done")
+                    log("received \(finalResult.count) bytes from dechunker")
+                    let timeInterval = startTime.timeIntervalSinceNow
+                    log("all chunks received in \(-timeInterval) secs")
+                    processResponse(finalResult)
+                    disconnect()
+                } else {
+                    // chunk was ok, but more to come
+                    log("dechunker ok, but not done yet")
+                    peripheral.readValueForCharacteristic(responseCharacteristic)
+                }
+            } else {
+                // chunk was faulty
+                log("dechunker failed")
+                disconnect()
+            }
         } else {
             log("peripheral didUpdateValueForCharacteristic error \(error.localizedDescription)")
-            return
+            disconnect()
         }
-        log("disconnecting")
+    }
+    
+    private func disconnect() {
+        log("disconnect")
         centralManager.cancelPeripheralConnection(peripheral)
         self.peripheral = nil
         self.responseCharacteristic = nil

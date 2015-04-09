@@ -7,6 +7,7 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		D61241171AD6D0F500697180 /* ChunkUtils.swift in Sources */ = {isa = PBXBuildFile; fileRef = D61241161AD6D0F500697180 /* ChunkUtils.swift */; };
 		D645FB781AD4358700B5BFB9 /* Logger.swift in Sources */ = {isa = PBXBuildFile; fileRef = D645FB771AD4358700B5BFB9 /* Logger.swift */; };
 		D67545991A6709AA00CF7B8D /* BluetoothManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = D67545981A6709AA00CF7B8D /* BluetoothManager.swift */; };
 		D6C01BE01A65DA2F00D61916 /* AppDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = D6C01BDF1A65DA2F00D61916 /* AppDelegate.swift */; };
@@ -28,6 +29,7 @@
 /* End PBXContainerItemProxy section */
 
 /* Begin PBXFileReference section */
+		D61241161AD6D0F500697180 /* ChunkUtils.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = ChunkUtils.swift; sourceTree = "<group>"; };
 		D645FB771AD4358700B5BFB9 /* Logger.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = Logger.swift; sourceTree = "<group>"; };
 		D67545981A6709AA00CF7B8D /* BluetoothManager.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; lineEnding = 0; path = BluetoothManager.swift; sourceTree = "<group>"; xcLanguageSpecificationIdentifier = xcode.lang.swift; };
 		D6C01BDA1A65DA2F00D61916 /* BTCmdCentral.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = BTCmdCentral.app; sourceTree = BUILT_PRODUCTS_DIR; };
@@ -82,6 +84,7 @@
 			isa = PBXGroup;
 			children = (
 				D645FB771AD4358700B5BFB9 /* Logger.swift */,
+				D61241161AD6D0F500697180 /* ChunkUtils.swift */,
 				D67545981A6709AA00CF7B8D /* BluetoothManager.swift */,
 				D6C01BDF1A65DA2F00D61916 /* AppDelegate.swift */,
 				D6C01BE11A65DA2F00D61916 /* ViewController.swift */,
@@ -220,6 +223,7 @@
 			files = (
 				D6C01BE21A65DA2F00D61916 /* ViewController.swift in Sources */,
 				D67545991A6709AA00CF7B8D /* BluetoothManager.swift in Sources */,
+				D61241171AD6D0F500697180 /* ChunkUtils.swift in Sources */,
 				D6C01BE01A65DA2F00D61916 /* AppDelegate.swift in Sources */,
 				D645FB781AD4358700B5BFB9 /* Logger.swift in Sources */,
 			);
