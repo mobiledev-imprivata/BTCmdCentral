@@ -11,8 +11,8 @@ import CoreBluetooth
 
 class BluetoothManager: NSObject {
     
-    private let provisioningServiceUUID = CBUUID(string: "193DB24F-E42E-49D2-9A70-6A5616863A9D")
-    private let commandCharacteristicUUID = CBUUID(string: "43CDD5AB-3EF6-496A-A4CC-9933F5ADAF68")
+    private let serviceUUID                = CBUUID(string: "193DB24F-E42E-49D2-9A70-6A5616863A9D")
+    private let requestCharacteristicUUID  = CBUUID(string: "43CDD5AB-3EF6-496A-A4CC-9933F5ADAF68")
     private let responseCharacteristicUUID = CBUUID(string: "F1A9A759-C922-4219-B62C-1A14F62DE0A4")
     
     private let timeoutInSecs = 5.0
@@ -27,7 +27,7 @@ class BluetoothManager: NSObject {
     
     private let dechunker = Dechunker()
     
-    private let chunkSize = 15
+    private let chunkSize = 50
     private var nChunks = 0
     private var nChunksSent = 0
     private var startTime = NSDate()
@@ -56,7 +56,7 @@ class BluetoothManager: NSObject {
             return
         }
         isBusy = true
-        startScanForPeripheralWithService(provisioningServiceUUID)
+        startScanForPeripheralWithService(serviceUUID)
     }
     
     private func startScanForPeripheralWithService(uuid: CBUUID) {
@@ -75,8 +75,8 @@ class BluetoothManager: NSObject {
     
     private func nameFromUUID(uuid: CBUUID) -> String {
         switch uuid {
-        case provisioningServiceUUID: return "provisioningService"
-        case commandCharacteristicUUID: return "commandCharacteristic"
+        case serviceUUID: return "service"
+        case requestCharacteristicUUID: return "requestCharacteristic"
         case responseCharacteristicUUID: return "responseCharacteristic"
         default: return "unknown"
         }
@@ -132,7 +132,7 @@ extension BluetoothManager: CBCentralManagerDelegate {
     func centralManager(central: CBCentralManager!, didConnectPeripheral peripheral: CBPeripheral!) {
         log("centralManager didConnectPeripheral")
         self.peripheral.delegate = self
-        peripheral.discoverServices([provisioningServiceUUID])
+        peripheral.discoverServices([serviceUUID])
     }
     
 }
@@ -162,7 +162,7 @@ extension BluetoothManager: CBPeripheralDelegate {
         for characteristic in service.characteristics {
             let name = nameFromUUID(characteristic.UUID)
             log("characteristic \(name) \(characteristic.UUID)")
-            if characteristic.UUID == commandCharacteristicUUID {
+            if characteristic.UUID == requestCharacteristicUUID {
                 let chunks = Chunker.makeChunks(mobyBytes, chunkSize: chunkSize)
                 log("chunk count=\(chunks.count)")
                 nChunks = chunks.count
