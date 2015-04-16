@@ -20,6 +20,7 @@ class BluetoothManager: NSObject {
     private var centralManager: CBCentralManager!
     private var peripheral: CBPeripheral!
     private var responseCharacteristic: CBCharacteristic!
+    private var requestCharacteristic: CBCharacteristic!
     private var isPoweredOn = false
     private var scanTimer: NSTimer!
     
@@ -27,7 +28,7 @@ class BluetoothManager: NSObject {
     
     private let dechunker = Dechunker()
     
-    private let chunkSize = 50
+    private let chunkSize = 18
     private var nChunks = 0
     private var nChunksSent = 0
     private var startTime = NSDate()
@@ -56,6 +57,7 @@ class BluetoothManager: NSObject {
             return
         }
         isBusy = true
+        startTime = NSDate()
         startScanForPeripheralWithService(serviceUUID)
     }
     
@@ -79,6 +81,22 @@ class BluetoothManager: NSObject {
         case requestCharacteristicUUID: return "requestCharacteristic"
         case responseCharacteristicUUID: return "responseCharacteristic"
         default: return "unknown"
+        }
+    }
+    
+    private func sendRequest() {
+        let chunks = Chunker.makeChunks(mobyBytes, chunkSize: chunkSize)
+        log("request is \(mobyBytes.count) bytes (\(chunks.count) chunk(s) of \(chunkSize) bytes)")
+        nChunks = chunks.count
+        nChunksSent = 0
+        dispatch_async(dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_DEFAULT, 0)) {
+            for (i, chunk) in enumerate(chunks) {
+                let chunkData = NSData(bytes: chunk, length: chunk.count)
+                log("sending chunk \(i + 1)/\(self.nChunks) (\(chunkData.length) bytes)")
+                self.peripheral.writeValue(chunkData, forCharacteristic: self.requestCharacteristic, type: CBCharacteristicWriteType.WithoutResponse)
+                usleep(25000)
+            }
+            // self.disconnect()
         }
     }
     
@@ -163,35 +181,13 @@ extension BluetoothManager: CBPeripheralDelegate {
             let name = nameFromUUID(characteristic.UUID)
             log("characteristic \(name) \(characteristic.UUID)")
             if characteristic.UUID == requestCharacteristicUUID {
-                let chunks = Chunker.makeChunks(mobyBytes, chunkSize: chunkSize)
-                log("chunk count=\(chunks.count)")
-                nChunks = chunks.count
-                nChunksSent = 0
-                startTime = NSDate()
-                for (i, chunk) in enumerate(chunks) {
-                    let chunkData = NSData(bytes: chunk, length: chunk.count)
-                    log("sending chunk \(i + 1) (\(chunkData.length) bytes)")
-                    peripheral.writeValue(chunkData, forCharacteristic: characteristic as! CBCharacteristic, type: CBCharacteristicWriteType.WithResponse)
-                }
+                requestCharacteristic = characteristic as! CBCharacteristic
             } else if characteristic.UUID == responseCharacteristicUUID {
                 responseCharacteristic = characteristic as! CBCharacteristic
+                peripheral.setNotifyValue(true, forCharacteristic: characteristic as! CBCharacteristic)
             }
         }
-    }
-    
-    func peripheral(peripheral: CBPeripheral!, didWriteValueForCharacteristic characteristic: CBCharacteristic!, error: NSError!) {
-        if error == nil {
-            nChunksSent++
-            log("peripheral didWriteValueForCharacteristic ok (\(nChunksSent)/\(nChunks))")
-            if nChunksSent == nChunks {
-                let timeInterval = startTime.timeIntervalSinceNow
-                log("all chunks sent in \(-timeInterval) secs")
-                startTime = NSDate()
-                peripheral.readValueForCharacteristic(responseCharacteristic)
-            }
-        } else {
-            log("peripheral didWriteValueForCharacteristic error \(error.localizedDescription)")
-        }
+        sendRequest()
     }
 
     func peripheral(peripheral: CBPeripheral!, didUpdateValueForCharacteristic characteristic: CBCharacteristic!, error: NSError!) {
@@ -206,14 +202,11 @@ extension BluetoothManager: CBPeripheralDelegate {
                 if let finalResult = retval.finalResult {
                     log("dechunker done")
                     log("received \(finalResult.count) bytes from dechunker")
-                    let timeInterval = startTime.timeIntervalSinceNow
-                    log("all chunks received in \(-timeInterval) secs")
                     processResponse(finalResult)
                     disconnect()
                 } else {
                     // chunk was ok, but more to come
                     log("dechunker ok, but not done yet")
-                    peripheral.readValueForCharacteristic(responseCharacteristic)
                 }
             } else {
                 // chunk was faulty
@@ -225,12 +218,14 @@ extension BluetoothManager: CBPeripheralDelegate {
             disconnect()
         }
     }
-    
+
     private func disconnect() {
-        log("disconnect")
+        let timeInterval = startTime.timeIntervalSinceNow
+        log("disconnect after \(-timeInterval) secs")
         centralManager.cancelPeripheralConnection(peripheral)
-        self.peripheral = nil
-        self.responseCharacteristic = nil
+        peripheral = nil
+        requestCharacteristic = nil
+        responseCharacteristic = nil
         isBusy = false
     }
     
